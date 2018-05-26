@@ -1,8 +1,41 @@
 import tensorflow as tf
 import numpy as np
 import pandas as pd
+import scipy
 import matplotlib.pyplot as plt
 
+shapes = {
+        "base": (94362233, 4),
+        "valid": (1965045, 4),
+        "hidden": (1964391, 4),
+        "probe": (1374739, 4),
+        "qual": (2749898, 3),
+        "training": (99666408, 4),
+        "training_no_probe": (98291669, 4)
+}
+
+valid = np.memmap('data/valid_mmap.dat', dtype='uint32', mode='r',
+                  shape=shapes["valid"])
+n_ratings = valid.shape[0]
+n_users = 458293
+n_movies = 17770
+ratings = {}
+for i in range(n_users):
+    ratings[i] = {}
+
+for line in valid:
+    ratings[line[0] - 1][line[1] - 1] = line[3] 
+
+user_list = np.array(list(ratings.keys()))
+
+def build_vectors(user_ids):
+    vecs = np.zeros((user_ids, n_movies))
+    for i, user_id in enumerate(user_ids):
+        for movie_id in ratings[user_id]:
+            vec[i][5 * movie_id + ratings[user_id][movie_id]] = 1
+    return vecs
+
+'''
 # Load the movies dataset and also pass header=None since files don't contain any headers
 movies_df = pd.read_csv('ml-1m/movies.dat', sep='::', header=None, engine='python')
 print(movies_df.head())
@@ -74,11 +107,11 @@ for userID, curUser in user_Group:
     if amountOfUsedUsers == 0:
         break
     amountOfUsedUsers -= 1
-print(trX)
-
+#print(trX[0])
+'''
 # Setting the models Parameters
 hiddenUnits = 50
-visibleUnits = len(movies_df)
+visibleUnits = len(n_movies)
 vb = tf.placeholder(tf.float32, [visibleUnits])  # Number of unique movies
 hb = tf.placeholder(tf.float32, [hiddenUnits])  # Number of features were going to learn
 W = tf.placeholder(tf.float32, [visibleUnits, hiddenUnits])  # Weight Matrix
@@ -110,9 +143,14 @@ update_w = W + alpha * CD
 update_vb = vb + alpha * tf.reduce_mean(v0 - v1, 0)
 update_hb = hb + alpha * tf.reduce_mean(h0 - h1, 0)
 
+# Set error function, here we use RMSE
+err_sum = tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(v0, v1))))
+"""
 # Set the error function, here we use Mean Absolute Error Function
 err = v0 - v1
 err_sum = tf.reduce_mean(err*err)
+"""
+
 
 """ Initialize our Variables with Zeroes using Numpy Library """
 
@@ -141,8 +179,10 @@ epochs = 15
 batchsize = 100
 errors = []
 for i in range(epochs):
-    for start, end in zip(range(0, len(trX), batchsize), range(batchsize, len(trX), batchsize)):
-        batch = trX[start:end]
+    # shuffle dataset
+    np.random.shuffle(user_list)
+    for start, end in zip(range(0, len(user_list), batchsize), range(batchsize, len(user_list), batchsize)):
+        batch = build_vectors(user_list[start:end])
         cur_w = sess.run(update_w, feed_dict={v0: batch, W: prv_w, vb: prv_vb, hb: prv_hb})
         cur_vb = sess.run(update_vb, feed_dict={v0: batch, W: prv_w, vb: prv_vb, hb: prv_hb})
         cur_hb = sess.run(update_hb, feed_dict={v0: batch, W: prv_w, vb: prv_vb, hb: prv_hb})
